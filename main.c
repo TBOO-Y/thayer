@@ -3,7 +3,7 @@
 #include "chunk.h"
 #include "debug.h"
 
-int main(int argc, const char* argv[]) {
+int main(int argc, const char* argv[]) { // This is a test.
     Chunk chunk;
     initChunk(&chunk);
 
