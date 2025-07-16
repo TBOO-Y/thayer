@@ -1,4 +1,6 @@
 #include <stdio.h>
+#include <time.h> // Only for testing purposes
+
 #include "common.h"
 #include "chunk.h"
 #include "debug.h"
@@ -14,36 +16,17 @@ int main(int argc, const char* argv[]) { // This is a test.
     writeChunk(&chunk, OP_CONSTANT, 123);
     writeChunk(&chunk, constant, 123);
 
-    constant = addConstant(&chunk, 2);
-    writeChunk(&chunk, OP_CONSTANT, 123);
-    writeChunk(&chunk, constant, 123);
-
-    constant = addConstant(&chunk, 3);
-    writeChunk(&chunk, OP_CONSTANT, 123);
-    writeChunk(&chunk, constant, 123);
-
-    writeChunk(&chunk, OP_MULTIPLY, 123);
-
-    constant = addConstant(&chunk, 4);
-    writeChunk(&chunk, OP_CONSTANT, 123);
-    writeChunk(&chunk, constant, 123);
-
-    constant = addConstant(&chunk, 5);
-    writeChunk(&chunk, OP_CONSTANT, 123);
-    writeChunk(&chunk, constant, 123);
-
-    writeChunk(&chunk, OP_NEGATE, 123);
-
-    writeChunk(&chunk, OP_DIVIDE, 123);
-
-    writeChunk(&chunk, OP_SUBTRACT, 123);
-
-    writeChunk(&chunk, OP_ADD, 123);
+    for (int i = 0; i < 100; i++) {
+        writeChunk(&chunk, OP_NEGATE, 123);
+    }
 
     writeChunk(&chunk, OP_RETURN, 124);
 
     // disassembleChunk(&chunk, "test chunk");
+    clock_t startTime = clock();
     interpret(&chunk);
+    clock_t timeElapsed = clock() - startTime;
+    printf("%f", (float)timeElapsed / CLOCKS_PER_SEC);
     // printf("I am here");
     freeVM();
     freeChunk(&chunk);
