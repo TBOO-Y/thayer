@@ -46,6 +46,11 @@ void writeChunk(Chunk* chunk, uint8_t byte, int line) {
     chunk->count++;
 }
 
+void writeConstant(Chunk* chunk, Value value, int line) {
+    writeChunk(chunk, OP_CONSTANT_LONG, line);
+    // Insert rest here.
+}
+
 int getLine(Chunk* chunk, int instruction) {
     int sum = 0;
     int count = 0;

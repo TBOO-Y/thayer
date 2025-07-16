@@ -12,4 +12,6 @@ add_executable(thayer main.c
         debug.c
         debug.h
         value.h
-        value.c)
+        value.c
+        vm.c
+        vm.h)
