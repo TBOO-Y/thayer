@@ -16,17 +16,15 @@ int main(int argc, const char* argv[]) { // This is a test.
     writeChunk(&chunk, OP_CONSTANT, 123);
     writeChunk(&chunk, constant, 123);
 
-    for (int i = 0; i < 100; i++) {
-        writeChunk(&chunk, OP_NEGATE, 123);
-    }
+    // writeChunk(&chunk, OP_TEST, 123);
 
     writeChunk(&chunk, OP_RETURN, 124);
 
     // disassembleChunk(&chunk, "test chunk");
-    clock_t startTime = clock();
+    // clock_t startTime = clock();
     interpret(&chunk);
-    clock_t timeElapsed = clock() - startTime;
-    printf("%f", (float)timeElapsed / CLOCKS_PER_SEC);
+    // clock_t timeElapsed = clock() - startTime;
+    // printf("%f", (float)timeElapsed / CLOCKS_PER_SEC);
     // printf("I am here");
     freeVM();
     freeChunk(&chunk);

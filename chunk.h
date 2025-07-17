@@ -12,7 +12,8 @@ typedef enum {
     OP_MULTIPLY,
     OP_DIVIDE,
     OP_NEGATE,
-    OP_RETURN
+    OP_RETURN,
+    OP_TEST
 } OpCode;
 
 typedef struct {
