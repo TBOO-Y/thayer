@@ -1,12 +1,9 @@
 # ninja log v6
-7	128	7744064997873695	CMakeFiles/thayer.dir/main.c.obj	23967a0ff3007bc4
-6	339	7743337966013645	build.ninja	fa22ce59bf86a137
+9	128	7744066396148892	CMakeFiles/thayer.dir/main.c.obj	23967a0ff3007bc4
+6	339	7744862371797863	build.ninja	fa22ce59bf86a137
 80	299	7744006767141050	CMakeFiles/thayer.dir/memory.c.obj	7ad29ad475019b2a
 95	288	7744006767293919	CMakeFiles/thayer.dir/value.c.obj	67ea8da97712632
 33	192	7744062648983813	CMakeFiles/thayer.dir/chunk.c.obj	95a2b9e4205c8ddc
 5	115	7744063367539161	CMakeFiles/thayer.dir/debug.c.obj	944bd6a6d6e7d7b6
-135	294	7744066001961338	thayer.exe	45d7bd8b68a057bd
-16	134	7744066000784794	CMakeFiles/thayer.dir/vm.c.obj	5ac7ac898d39127b
-9	128	7744066396148892	CMakeFiles/thayer.dir/main.c.obj	23967a0ff3007bc4
-20	137	7744066396256337	CMakeFiles/thayer.dir/vm.c.obj	5ac7ac898d39127b
 137	284	7744066397421246	thayer.exe	45d7bd8b68a057bd
+20	137	7744066396256337	CMakeFiles/thayer.dir/vm.c.obj	5ac7ac898d39127b

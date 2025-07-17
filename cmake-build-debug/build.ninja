@@ -85,6 +85,18 @@ build CMakeFiles/thayer.dir/vm.c.obj: C_COMPILER__thayer_unscanned_Debug C$:/Use
   OBJECT_DIR = CMakeFiles\thayer.dir
   OBJECT_FILE_DIR = CMakeFiles\thayer.dir
 
+build CMakeFiles/thayer.dir/compiler.c.obj: C_COMPILER__thayer_unscanned_Debug C$:/Users/samhu/CLionProjects/thayer/compiler.c || cmake_object_order_depends_target_thayer
+  DEP_FILE = CMakeFiles\thayer.dir\compiler.c.obj.d
+  FLAGS = -g -std=gnu11 -fdiagnostics-color=always
+  OBJECT_DIR = CMakeFiles\thayer.dir
+  OBJECT_FILE_DIR = CMakeFiles\thayer.dir
+
+build CMakeFiles/thayer.dir/scanner.c.obj: C_COMPILER__thayer_unscanned_Debug C$:/Users/samhu/CLionProjects/thayer/scanner.c || cmake_object_order_depends_target_thayer
+  DEP_FILE = CMakeFiles\thayer.dir\scanner.c.obj.d
+  FLAGS = -g -std=gnu11 -fdiagnostics-color=always
+  OBJECT_DIR = CMakeFiles\thayer.dir
+  OBJECT_FILE_DIR = CMakeFiles\thayer.dir
+
 
 # =============================================================================
 # Link build statements for EXECUTABLE target thayer
@@ -93,7 +105,7 @@ build CMakeFiles/thayer.dir/vm.c.obj: C_COMPILER__thayer_unscanned_Debug C$:/Use
 #############################################
 # Link the executable thayer.exe
 
-build thayer.exe: C_EXECUTABLE_LINKER__thayer_Debug CMakeFiles/thayer.dir/main.c.obj CMakeFiles/thayer.dir/chunk.c.obj CMakeFiles/thayer.dir/memory.c.obj CMakeFiles/thayer.dir/debug.c.obj CMakeFiles/thayer.dir/value.c.obj CMakeFiles/thayer.dir/vm.c.obj
+build thayer.exe: C_EXECUTABLE_LINKER__thayer_Debug CMakeFiles/thayer.dir/main.c.obj CMakeFiles/thayer.dir/chunk.c.obj CMakeFiles/thayer.dir/memory.c.obj CMakeFiles/thayer.dir/debug.c.obj CMakeFiles/thayer.dir/value.c.obj CMakeFiles/thayer.dir/vm.c.obj CMakeFiles/thayer.dir/compiler.c.obj CMakeFiles/thayer.dir/scanner.c.obj
   FLAGS = -g
   LINK_LIBRARIES = -lkernel32 -luser32 -lgdi32 -lwinspool -lshell32 -lole32 -loleaut32 -luuid -lcomdlg32 -ladvapi32
   OBJECT_DIR = CMakeFiles\thayer.dir

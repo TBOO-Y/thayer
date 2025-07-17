@@ -14,4 +14,8 @@ add_executable(thayer main.c
         value.h
         value.c
         vm.c
-        vm.h)
+        vm.h
+        compiler.h
+        compiler.c
+        scanner.h
+        scanner.c)
