@@ -193,7 +193,7 @@ static TokenType identifierType() {
 }
 
 static Token identifier() {
-    while (isAlpha(peek()) && isDigit(peek())) advance();
+    while (isAlpha(peek()) || isDigit(peek())) advance();
     return makeToken(identifierType());
 }
 
@@ -211,7 +211,7 @@ static Token number() {
     return makeToken(TOKEN_NUMBER);
 }
 
-static Token string() {
+static Token string() { // Implement string interpolation later
     while (peek() != '"' && !isAtEnd()) {
         if (peek() == '\n') scanner.line++;
         advance();
