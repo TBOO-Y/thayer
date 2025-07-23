@@ -18,4 +18,6 @@ add_executable(thayer main.c
         compiler.h
         compiler.c
         scanner.h
-        scanner.c)
+        scanner.c
+        object.c
+        object.h)
