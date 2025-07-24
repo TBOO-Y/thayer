@@ -22,6 +22,15 @@ static ObjString* allocateString(char* chars, int length) {
     ObjString* string = ALLOCATE_OBJ(ObjString, OBJ_STRING);
     string->length = length;
     string->chars = chars;
+    string->freeable = true;
+    return string;
+}
+
+ObjString* allocateSourceString(const char* chars, int length) {
+    ObjString* string = ALLOCATE_OBJ(ObjString, OBJ_STRING);
+    string->length = length;
+    string->chars = chars;
+    string->freeable = false;
     return string;
 }
 
