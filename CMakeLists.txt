@@ -20,4 +20,8 @@ add_executable(thayer main.c
         scanner.h
         scanner.c
         object.c
-        object.h)
+        object.h
+        table.h
+        table.c
+        siphash.c
+        siphash.h)

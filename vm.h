@@ -2,6 +2,7 @@
 #define thayer_vm_h
 
 #include "chunk.h"
+#include "table.h"
 #include "value.h"
 
 typedef struct {
@@ -10,6 +11,7 @@ typedef struct {
     Value* stack;
     Value* stackTop;
     int stackCapacity;
+    Table strings;
     Obj* objects;
 } VM;
 

@@ -25,6 +25,7 @@ struct ObjString {
     int length;
     bool freeable;
     char* chars;
+    uint32_t hash;
 };
 
 ObjString* allocateSourceString(const char* chars, int length);

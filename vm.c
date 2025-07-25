@@ -36,9 +36,11 @@ void initVM() {
     vm.stackCapacity = 256; // Set stack capacity to 256 initially
     resetStack();
     vm.objects = NULL;
+    initTable(&vm.strings);
 }
 
 void freeVM() {
+    freeTable(&vm.strings);
     freeObjects();
 }
 
