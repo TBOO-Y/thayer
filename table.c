@@ -8,6 +8,8 @@
 
 #define TABLE_MAX_LOAD 0.9
 
+#define SWAP(type, a, b) do {type tmp = a; a = b; b = tmp;} while (false)
+
 void initTable(Table* table) {
     table->count = 0;
     table->capacity = 0;
@@ -19,25 +21,23 @@ void freeTable(Table* table) {
     initTable(table);
 }
 
-static Entry* findEntry(Entry* entries, int capacity, ObjString* key) {
+static Entry* findEntry(Entry* entries, int capacity, ObjString* key, bool nearestEmpty) {
+    // nearestEmpty true: finds entry or nearest empty, false: finds entry if possible
     uint32_t index = key->hash % capacity;
-    Entry* tombstone = NULL;
+    int probeSequenceLength = 0;
 
     for (;;) {
         Entry* entry = &entries[index];
-        if (entry->key == NULL) {
-            if (IS_NIL(entry->value)) {
-                // Empty entry.
-                return tombstone != NULL ? tombstone : entry;
-            } else {
-                // We found a tombstone.
-                if (tombstone == NULL) tombstone = entry;
-            }
+        if (entry->key == NULL && IS_NIL(entry->value)) {
+            return entry;
+        } else if (!nearestEmpty && probeSequenceLength > entry->probeSequenceLength) {
+            return NULL;
         } else if (entry->key == key) {
             return entry;
         }
 
         index = (index + 1) % capacity;
+        probeSequenceLength++;
     }
 }
 
@@ -46,15 +46,17 @@ static void adjustCapacity(Table* table, int capacity) {
     for (int i = 0; i < capacity; i++) {
         entries[i].key = NULL;
         entries[i].value = NIL_VAL;
+        entries[i].probeSequenceLength = 0;
     }
 
     table->count = 0;
     for (int i = 0; i < table->capacity; i++) {
         Entry* entry = &table->entries[i];
-        if (entry->key == NULL) continue;
-        Entry* dest = findEntry(entries, capacity, entry->key);
+        if (entry->key == NULL) continue; // Ignore tombstones and empty entries
+        Entry* dest = findEntry(entries, capacity, entry->key, true);
         dest->key = entry->key;
         dest->value = entry->value;
+        dest->probeSequenceLength = entry->probeSequenceLength;
         table->count++;
     }
 
@@ -66,8 +68,8 @@ static void adjustCapacity(Table* table, int capacity) {
 bool tableGet(Table* table, ObjString* key, Value* value) {
     if (table->count == 0) return false;
 
-    Entry* entry = findEntry(table->entries, table->capacity, key);
-    if (entry->key == NULL) return false;
+    Entry* entry = findEntry(table->entries, table->capacity, key, false);
+    if (entry == NULL || entry->key == NULL) return false;
 
     *value = entry->value;
     return true;
@@ -79,21 +81,44 @@ bool tableSet(Table* table, ObjString* key, Value value) {
         adjustCapacity(table, capacity);
     }
 
-    Entry* entry = findEntry(table->entries, table->capacity, key);
-    bool isNewKey = entry->key == NULL;
-    if (isNewKey && IS_NIL(entry->value)) table->count++;
+    Entry* entry = findEntry(table->entries, table->capacity, key, false);
+    if (entry == NULL || entry->key == NULL) { // Is it a new key?
+        uint32_t index = key->hash % table->capacity;
+        int probeSequenceLength = 0;
+        for (;;) {
+            entry = &table->entries[index];
+            if (entry->key == NULL) {
+                break;
+            }
+
+            if (probeSequenceLength > entry->probeSequenceLength) {
+                SWAP(Value, value, entry->value);
+                SWAP(ObjString*, key, entry->key);
+                SWAP(int, probeSequenceLength, entry->probeSequenceLength);
+            }
+
+            index = (index + 1) % table->capacity;
+            probeSequenceLength++;
+        }
+
+        if (IS_NIL(entry->value)) table->count++; // If it's not a tombstone, update count
+        entry->key = key;
+        entry->value = value;
+        entry->probeSequenceLength = probeSequenceLength;
+        return true;
+    }
 
     entry->key = key;
     entry->value = value;
-    return isNewKey;
+    return false;
 }
 
 bool tableDelete(Table* table, ObjString* key) {
     if (table->count == 0) return false;
 
     // Find the entry.
-    Entry* entry = findEntry(table->entries, table->capacity, key);
-    if (entry->key == NULL) return false;
+    Entry* entry = findEntry(table->entries, table->capacity, key, false);
+    if (entry == NULL || entry->key == NULL) return false;
 
     // Place a tombstone in the entry.
     entry->key = NULL;

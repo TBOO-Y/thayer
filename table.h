@@ -7,7 +7,7 @@
 typedef struct {
     ObjString* key;
     Value value;
-    // int probeSequenceLength;
+    int probeSequenceLength;
 } Entry;
 
 typedef struct {
