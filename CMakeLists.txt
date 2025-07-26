@@ -23,5 +23,4 @@ add_executable(thayer main.c
         object.h
         table.h
         table.c
-        siphash.c
-        siphash.h)
+)
