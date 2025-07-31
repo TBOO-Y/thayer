@@ -1,6 +1,7 @@
 #include <stdio.h>
 
 #include "debug.h"
+#include "type_checker.h"
 #include "value.h"
 
 void disassembleChunk(Chunk* chunk, const char* name) {
@@ -16,6 +17,17 @@ static int constantInstruction(const char* name, Chunk* chunk, int offset) {
     printValue(chunk->constants.values[constant]);
     printf("'\n");
     return offset + 2;
+}
+
+static int constantVariableInstruction(const char* name, Chunk* chunk, int offset) {
+    uint8_t constant = chunk->code[offset + 1];
+    uint8_t type = chunk->code[offset + 2];
+    printf("%-16s %4d '", name, constant);
+    printValue(chunk->constants.values[constant]);
+    printf("' ");
+    printType(type);
+    printf("\n");
+    return offset + 3;
 }
 
 static int simpleInstruction(const char* name, int offset) {
@@ -44,11 +56,11 @@ int disassembleInstruction(Chunk* chunk, int offset) {
         case OP_POP:
             return simpleInstruction("OP_POP", offset);
         case OP_GET_GLOBAL:
-            return constantInstruction("OP_GET_GLOBAL", chunk, offset);
+            return constantVariableInstruction("OP_GET_GLOBAL", chunk, offset);
         case OP_DEFINE_GLOBAL:
-            return constantInstruction("OP_DEFINE_GLOBAL", chunk, offset);
+            return constantVariableInstruction("OP_DEFINE_GLOBAL", chunk, offset);
         case OP_SET_GLOBAL:
-            return constantInstruction("OP_SET_GLOBAL", chunk, offset);
+            return constantVariableInstruction("OP_SET_GLOBAL", chunk, offset);
         case OP_EQUAL:
             return simpleInstruction("OP_EQUAL", offset);
         case OP_NOT_EQUAL:

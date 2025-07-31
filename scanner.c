@@ -117,7 +117,6 @@ static TokenType identifierType() {
                         if (scanner.current - scanner.start == 3) {
                             switch (scanner.start[2]) {
                                 case 'd': return TOKEN_AND;
-                                case 'y': return TOKEN_ANY;
                                 default: return TOKEN_IDENTIFIER;
                             }
                         }
@@ -176,7 +175,13 @@ static TokenType identifierType() {
         case 'o': return checkKeyword(1, 1, "r", TOKEN_OR);
         case 'p': return checkKeyword(1, 4, "rint", TOKEN_PRINT);
         case 'r': return checkKeyword(1, 5, "eturn", TOKEN_RETURN);
-        case 's': return checkKeyword(1, 4, "uper", TOKEN_SUPER);
+        case 's':
+            if (scanner.current - scanner.start > 1) {
+                switch (scanner.start[1]) {
+                    case 'u': return checkKeyword(2, 3, "per", TOKEN_SUPER);
+                    case 't': return checkKeyword(2, 1, "r", TOKEN_STR);
+                }
+            }
         case 't':
             if (scanner.current - scanner.start > 1) {
                 switch (scanner.start[1]) {
@@ -198,17 +203,19 @@ static Token identifier() {
 }
 
 static Token number() {
+    bool hasDecimal = false;
     if (isDigit(peek())) advance();
 
     // Look for a fractional part.
     if (peek() == '.' && isDigit(peekNext())) {
+        hasDecimal = true;
         // Consume the ".".
         advance();
 
         while (isDigit(peek())) advance();
     }
 
-    return makeToken(TOKEN_NUMBER);
+    return hasDecimal ? makeToken(TOKEN_NUMBER) : makeToken(TOKEN_INTEGER);
 }
 
 static Token string() { // Implement string interpolation later

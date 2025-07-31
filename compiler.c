@@ -6,6 +6,7 @@
 #include "common.h"
 #include "compiler.h"
 #include "scanner.h"
+#include "type_checker.h"
 
 #ifdef DEBUG_PRINT_CODE
 #include "debug.h"
@@ -154,8 +155,9 @@ static uint8_t parseVariable(const char* errorMessage) {
     return identifierConstant(&parser.previous);
 }
 
-static void defineVariable(uint8_t global) {
+static void defineVariable(uint8_t global, TokenType type) {
     emitBytes(OP_DEFINE_GLOBAL, global);
+    emitByte(type);
 }
 
 static void binary(bool canAssign) {
@@ -198,6 +200,8 @@ static void expression() {
 }
 
 static void varDeclaration() {
+    TokenType type = parser.previous.type;
+
     uint8_t global = parseVariable("Expect variable name.");
 
     if (match(TOKEN_EQUAL)) {
@@ -207,7 +211,7 @@ static void varDeclaration() {
     }
     consume(TOKEN_SEMICOLON, "Expect ; after variable declaration.");
 
-    defineVariable(global);
+    defineVariable(global, type);
 }
 
 static void expressionStatement() {
@@ -246,7 +250,9 @@ static void synchronize() {
 }
 
 static void declaration() {
-    if (match(TOKEN_VAR)) {
+    if (match(TOKEN_VAR) || match(TOKEN_INT) // Seems slow, should find a better way later
+        || match(TOKEN_STR) || match(TOKEN_DOUBLE)
+        || match(TOKEN_BOOL) || match(TOKEN_CHAR)) {
         varDeclaration();
     } else {
         statement();
@@ -261,6 +267,11 @@ static void statement() {
     } else {
         expressionStatement();
     }
+}
+
+static void integer(bool canAssign) {
+    int value = atoi(parser.previous.start);
+    emitConstant(INT_VAL(value));
 }
 
 static void number(bool canAssign) {
@@ -324,9 +335,9 @@ ParseRule rules[] = {
     [TOKEN_LESS_EQUAL]    = {NULL, binary, PREC_COMPARISON},
     [TOKEN_IDENTIFIER]    = {variable, NULL, PREC_NONE},
     [TOKEN_STRING]        = {string, NULL, PREC_NONE},
+    [TOKEN_INTEGER]       = {integer, NULL, PREC_NONE},
     [TOKEN_NUMBER]        = {number, NULL, PREC_NONE},
     [TOKEN_AND]           = {NULL, NULL, PREC_AND},
-    [TOKEN_ANY]           = {NULL, NULL, PREC_NONE},
     [TOKEN_AS]            = {NULL, NULL, PREC_NONE},
     [TOKEN_BOOL]          = {NULL, NULL, PREC_NONE},
     [TOKEN_CHAR]          = {NULL, NULL, PREC_NONE},
@@ -346,6 +357,7 @@ ParseRule rules[] = {
     [TOKEN_PRINT]         = {NULL, NULL, PREC_NONE},
     [TOKEN_RETURN]        = {NULL, NULL, PREC_NONE},
     [TOKEN_SUPER]         = {NULL, NULL, PREC_NONE},
+    [TOKEN_STR]           = {NULL, NULL, PREC_NONE},
     [TOKEN_THIS]          = {NULL, NULL, PREC_NONE},
     [TOKEN_TRUE]          = {literal, NULL, PREC_NONE},
     [TOKEN_VAR]           = {NULL, NULL, PREC_NONE},

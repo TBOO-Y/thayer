@@ -5,6 +5,7 @@
 #include "compiler.h"
 #include "object.h"
 #include "memory.h"
+#include "type_checker.h"
 #include "vm.h"
 
 #include <string.h>
@@ -88,15 +89,37 @@ static InterpretResult run() {
 #define READ_BYTE() (*vm.ip++)
 #define READ_CONSTANT() (vm.chunk->constants.values[READ_BYTE()])
 #define READ_STRING() AS_STRING(READ_CONSTANT())
-#define BINARY_OP(valueType, op) \
+#define BINARY_OP_EXECUTE(outputValueType, inputValueType, inputCType, op) \
     do { \
-        if (!IS_NUMBER(peek(0)) || !IS_NUMBER(peek(1))) { \
-            runtimeError("Operands must be numbers."); \
+        if (!SAME_TYPE(peek(0), peek(1))) { \
+            runtimeError("Operand types must be the same."); \
             return INTERPRET_RUNTIME_ERROR; \
         } \
-        double b = AS_NUMBER(pop()); \
-        double a = AS_NUMBER(pop()); \
-        push(valueType(a op b)); \
+        inputCType b = inputValueType(pop()); \
+        inputCType a = inputValueType(pop()); \
+        push(outputValueType(a op b)); \
+    } while (false)
+#define BINARY_OP(outputValueType, op) \
+    do { \
+        switch (peek(0).type) { \
+            case VAL_CHAR:   BINARY_OP_EXECUTE(outputValueType, AS_CHAR, char, op); break; \
+            case VAL_INT:    BINARY_OP_EXECUTE(outputValueType, AS_INT, int, op); break; \
+            case VAL_NUMBER: BINARY_OP_EXECUTE(outputValueType, AS_NUMBER, double, op); break; \
+            default: \
+                runtimeError("Operands must be integers, doubles or chars."); \
+                return INTERPRET_RUNTIME_ERROR; \
+        } \
+    } while (false)
+#define BINARY_OP_ARITH(op) \
+    do { \
+        switch (peek(0).type) { \
+            case VAL_CHAR:   BINARY_OP_EXECUTE(CHAR_VAL, AS_CHAR, char, op); break; \
+            case VAL_INT:    BINARY_OP_EXECUTE(INT_VAL, AS_INT, int, op); break; \
+            case VAL_NUMBER: BINARY_OP_EXECUTE(NUMBER_VAL, AS_NUMBER, double, op); break; \
+            default: \
+                runtimeError("Operands must be integers, doubles or chars."); \
+                return INTERPRET_RUNTIME_ERROR; \
+        } \
     } while (false)
 
     for (;;) {
@@ -134,6 +157,14 @@ static InterpretResult run() {
             }
             case OP_DEFINE_GLOBAL: {
                 ObjString* name = READ_STRING();
+                TokenType type = READ_BYTE();
+
+                if (!typeCheck(peek(0), type)) {
+                    const char* typeName = typeToName(type);
+                    runtimeError("Variable '%s' does not match declared type %s.", name->chars, typeName);
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+
                 tableSet(&vm.globals, name, peek(0));
                 pop();
                 break;
@@ -145,6 +176,8 @@ static InterpretResult run() {
                     runtimeError("Undefined variable '%s'.", name->chars);
                     return INTERPRET_RUNTIME_ERROR;
                 }
+
+                // Insert type-checking code here later.
                 break;
             }
             case OP_EQUAL: {
@@ -166,19 +199,21 @@ static InterpretResult run() {
             case OP_ADD: {
                 if (IS_STRING(peek(0)) && IS_STRING(peek(1))) {
                     concatenate();
-                } else if (IS_NUMBER(peek(0)) && IS_NUMBER(peek(1))) {
-                    double b = AS_NUMBER(pop());
-                    double a = AS_NUMBER(pop());
-                    push(NUMBER_VAL(a + b));
                 } else {
-                    runtimeError("Operands must be two numbers or two strings.");
-                    return INTERPRET_RUNTIME_ERROR;
+                    switch (peek(0).type) {
+                        case VAL_CHAR:   BINARY_OP_EXECUTE(CHAR_VAL, AS_CHAR, char, +); break;
+                        case VAL_INT:    BINARY_OP_EXECUTE(INT_VAL, AS_INT, int, +); break;
+                        case VAL_NUMBER: BINARY_OP_EXECUTE(NUMBER_VAL, AS_NUMBER, double, +); break;
+                        default:
+                            runtimeError("Operands must be two numbers of the same type or two strings.");
+                            return INTERPRET_RUNTIME_ERROR;
+                    }
                 }
                 break;
             }
-            case OP_SUBTRACT:       BINARY_OP(NUMBER_VAL, -); break;
-            case OP_MULTIPLY:       BINARY_OP(NUMBER_VAL, *); break;
-            case OP_DIVIDE:         BINARY_OP(NUMBER_VAL, /); break;
+            case OP_SUBTRACT:       BINARY_OP_ARITH(-); break;
+            case OP_MULTIPLY:       BINARY_OP_ARITH(*); break;
+            case OP_DIVIDE:         BINARY_OP_ARITH(/); break;
             case OP_NOT: {
                 push(BOOL_VAL(isFalsey(pop())));
                 break;

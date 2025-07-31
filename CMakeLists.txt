@@ -23,4 +23,6 @@ add_executable(thayer main.c
         object.h
         table.h
         table.c
+        type_checker.h
+        type_checker.c
 )
