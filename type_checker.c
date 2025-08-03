@@ -41,6 +41,22 @@ const char* typeToName(TokenType type) {
     }
 }
 
+const char* getValueTypeName(Value value) {
+    switch (value.type) {
+        case VAL_BOOL:     return "bool";
+        case VAL_CHAR:     return "char";
+        case VAL_NUMBER:   return "double";
+        case VAL_INT:      return "int";
+        case VAL_OBJ: {
+            switch (value.as.obj->type) {
+                case OBJ_STRING: return "string";
+                default:         return "nil";
+            }
+        }
+        default:           return "nil";
+    }
+}
+
 void printType(TokenType type) {
     printf("%s", typeToName(type));
 }

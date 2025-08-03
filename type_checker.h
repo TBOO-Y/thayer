@@ -9,6 +9,7 @@
 bool typeCheck(Value value, TokenType type);
 ValueType tagToType(TokenType type);
 const char* typeToName(TokenType type);
+const char* getValueTypeName(Value value);
 void printType(TokenType type);
 
 #endif

@@ -21,15 +21,19 @@ typedef struct {
 
 typedef enum {
     PREC_NONE,
-    PREC_ASSIGNMENT, // =
-    PREC_OR,         // or
-    PREC_AND,        // and
-    PREC_EQUALITY,   // == !=
-    PREC_COMPARISON, // < > <= >=
-    PREC_TERM,       // + -
-    PREC_FACTOR,     // * /
-    PREC_UNARY,      // ! -
-    PREC_CALL,       // . ()
+    PREC_ASSIGNMENT,  // =
+    PREC_OR,          // or
+    PREC_AND,         // and
+    PREC_BITWISE_OR,  // |
+    PREC_BITWISE_XOR, // ^
+    PREC_BITWISE_AND, // &
+    PREC_EQUALITY,    // == !=
+    PREC_COMPARISON,  // < > <= >=
+    PREC_TERM,        // + -
+    PREC_FACTOR,      // * /
+    PREC_POWER,       // **
+    PREC_UNARY,       // ! - ~
+    PREC_CALL,        // . ()
     PREC_PRIMARY
 } Precedence;
 
@@ -165,7 +169,7 @@ static void binary(bool canAssign) {
     ParseRule* rule = getRule(operatorType);
     parsePrecedence((Precedence)(rule->precedence + 1));
 
-    switch (operatorType) {
+    switch (operatorType) { // Not sure whether to make += expand in compile time or not yet
         case TOKEN_BANG_EQUAL:    emitByte(OP_NOT_EQUAL); break;
         case TOKEN_EQUAL_EQUAL:   emitByte(OP_EQUAL); break;
         case TOKEN_GREATER:       emitByte(OP_GREATER); break;
@@ -176,6 +180,10 @@ static void binary(bool canAssign) {
         case TOKEN_MINUS:         emitByte(OP_SUBTRACT); break;
         case TOKEN_STAR:          emitByte(OP_MULTIPLY); break;
         case TOKEN_SLASH:         emitByte(OP_DIVIDE); break;
+        case TOKEN_AMPERSAND:     emitByte(OP_BITWISE_AND); break;
+        case TOKEN_VERTICAL_LINE: emitByte(OP_BITWISE_OR); break;
+        case TOKEN_CARET:         emitByte(OP_BITWISE_XOR); break;
+        case TOKEN_STAR_STAR:     emitByte(OP_POWER); break;
         default:
             return; // Unreachable.
     }
@@ -309,6 +317,7 @@ static void unary(bool canAssign) {
     switch (operatorType) {
         case TOKEN_NOT: emitByte(OP_NOT); break;
         case TOKEN_MINUS: emitByte(OP_NEGATE); break;
+        case TOKEN_TILDE: emitByte(OP_BITWISE_NOT); break;
         default: return; // Unreachable.
     }
 }
@@ -325,6 +334,15 @@ ParseRule rules[] = {
     [TOKEN_SEMICOLON]     = {NULL, NULL, PREC_NONE},
     [TOKEN_SLASH]         = {NULL, binary, PREC_FACTOR},
     [TOKEN_STAR]          = {NULL, binary, PREC_FACTOR},
+    [TOKEN_STAR_STAR]     = {NULL, binary, PREC_POWER},
+    [TOKEN_PLUS_EQUAL]    = {NULL, binary, PREC_ASSIGNMENT},
+    [TOKEN_MINUS_EQUAL]   = {NULL, binary, PREC_ASSIGNMENT},
+    [TOKEN_STAR_EQUAL]    = {NULL, binary, PREC_ASSIGNMENT},
+    [TOKEN_SLASH_EQUAL]   = {NULL, binary, PREC_ASSIGNMENT},
+    [TOKEN_AMPERSAND]     = {NULL, binary, PREC_BITWISE_AND},
+    [TOKEN_VERTICAL_LINE] = {NULL, binary, PREC_BITWISE_OR},
+    [TOKEN_CARET]         = {NULL, binary, PREC_BITWISE_XOR},
+    [TOKEN_TILDE]         = {unary, NULL, PREC_UNARY},
     [TOKEN_NOT]           = {NULL, NULL, PREC_NONE},
     [TOKEN_BANG_EQUAL]    = {NULL, binary, PREC_EQUALITY},
     [TOKEN_EQUAL]         = {NULL, NULL, PREC_NONE},

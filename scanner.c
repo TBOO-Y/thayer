@@ -4,6 +4,8 @@
 #include "common.h"
 #include "scanner.h"
 
+#include <stdlib.h>
+
 typedef struct {
     const char* start;
     const char* current;
@@ -249,10 +251,15 @@ Token scanToken() {
         case ';': return makeToken(TOKEN_SEMICOLON);
         case ',': return makeToken(TOKEN_COMMA);
         case '.': return makeToken(TOKEN_DOT);
-        case '-': return makeToken(TOKEN_MINUS);
-        case '+': return makeToken(TOKEN_PLUS);
-        case '/': return makeToken(TOKEN_SLASH);
-        case '*': return makeToken(TOKEN_STAR);
+        case '-': return makeToken(match('=') ? TOKEN_MINUS_EQUAL : TOKEN_MINUS);
+        case '+': return makeToken(match('=') ? TOKEN_PLUS_EQUAL : TOKEN_PLUS);
+        case '/': return makeToken(match('=') ? TOKEN_SLASH_EQUAL : TOKEN_SLASH);
+        case '*': return makeToken(match('*') ? TOKEN_STAR_STAR :
+                                  (match('=') ? TOKEN_STAR_EQUAL : TOKEN_STAR));
+        case '&': return makeToken(TOKEN_AMPERSAND);
+        case '|': return makeToken(TOKEN_VERTICAL_LINE);
+        case '^': return makeToken(TOKEN_CARET);
+        case '~': return makeToken(TOKEN_TILDE);
         case '=': return makeToken(match('=') ? TOKEN_EQUAL_EQUAL : TOKEN_EQUAL);
         case '<': return makeToken(match('=') ? TOKEN_LESS_EQUAL : TOKEN_LESS);
         case '>': return makeToken(match('=') ? TOKEN_GREATER_EQUAL : TOKEN_GREATER);

@@ -121,6 +121,15 @@ static InterpretResult run() {
                 return INTERPRET_RUNTIME_ERROR; \
         } \
     } while (false)
+#define BINARY_OP_BITWISE(op) \
+    do { \
+        if (peek(0).type == VAL_INT) { \
+            BINARY_OP_EXECUTE(INT_VAL, AS_INT, int, op); \
+        } else { \
+            runtimeError("Operands must be integers."); \
+            return INTERPRET_RUNTIME_ERROR; \
+        } \
+    } while (false)
 
     for (;;) {
 #ifdef DEBUG_TRACE_EXECUTION
@@ -161,7 +170,7 @@ static InterpretResult run() {
 
                 if (!typeCheck(peek(0), type)) {
                     const char* typeName = typeToName(type);
-                    runtimeError("Variable '%s' does not match declared type %s.", name->chars, typeName);
+                    runtimeError("Variable '%s' does not match declared type '%s'.", name->chars, typeName);
                     return INTERPRET_RUNTIME_ERROR;
                 }
 
@@ -171,13 +180,18 @@ static InterpretResult run() {
             }
             case OP_SET_GLOBAL: {
                 ObjString* name = READ_STRING();
+                Value value;
+                if (tableGet(&vm.globals, name, &value) && !SAME_TYPE(peek(0), value)) {
+                    runtimeError("Tried to assign value of type '%s' to variable '%s' of type '%s'.",
+                        getValueTypeName(peek(0)), name->chars, getValueTypeName(value));
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+
                 if (tableSet(&vm.globals, name, peek(0))) {
                     tableDelete(&vm.globals, name);
                     runtimeError("Undefined variable '%s'.", name->chars);
                     return INTERPRET_RUNTIME_ERROR;
                 }
-
-                // Insert type-checking code here later.
                 break;
             }
             case OP_EQUAL: {
@@ -214,6 +228,16 @@ static InterpretResult run() {
             case OP_SUBTRACT:       BINARY_OP_ARITH(-); break;
             case OP_MULTIPLY:       BINARY_OP_ARITH(*); break;
             case OP_DIVIDE:         BINARY_OP_ARITH(/); break;
+            case OP_BITWISE_AND:    BINARY_OP_BITWISE(&); break;
+            case OP_BITWISE_OR:     BINARY_OP_BITWISE(|); break;
+            case OP_BITWISE_XOR:    BINARY_OP_BITWISE(^); break;
+            case OP_BITWISE_NOT: {
+                if (!IS_INT(peek(0))) {
+                    runtimeError("Operand must be an integer.");
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+                push(INT_VAL(~AS_INT(pop())));
+            }
             case OP_NOT: {
                 push(BOOL_VAL(isFalsey(pop())));
                 break;
