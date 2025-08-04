@@ -84,6 +84,46 @@ static uint32_t hashString(const char* key, int length) {
     return hash;
 }
 
+static uint32_t hashAddress(void* ptr) {
+    uintptr_t number = (uintptr_t)ptr;
+    uint32_t hash = 2166136261u;
+    for (int i = 0; i < sizeof(number); i++) {
+        uint8_t byte = (uint8_t)((number >> (i * 8)) & 0xFF);
+        hash ^= byte;
+        hash += 16777619;
+    }
+    return hash;
+}
+
+static uint32_t hashObject(Obj* obj) {
+    switch (obj->type) {
+        case OBJ_STRING:
+            ObjString* str = (ObjString*)(obj);
+            return hashString(str->chars, str->length);
+        default:
+            return hashAddress(&obj);
+    }
+}
+
+static uint32_t hashValue(Value value) {
+    switch (value.type) {
+        case VAL_CHAR:   return (uint32_t)value.as.chara;
+        case VAL_INT:    return (uint32_t)value.as.integer;
+        case VAL_NUMBER: { // Verify this later, some sus stuff going on here
+            double number = value.as.number;
+            if (number == 0.0) return 0;
+            // Re-interpret double bits as a long
+            long bits = *(long*)(&number);
+            // Mix bits using XOR
+            return (uint32_t)(bits ^ (bits >> 32));
+        }
+        case VAL_OBJ:
+            return hashObject(value.as.obj);
+        default:
+            return hashAddress(&value);
+    }
+}
+
 ObjString* allocateSourceString(const char* chars, int length) {
     uint32_t hash = hashString(chars, length);
     ObjString* string = ALLOCATE_OBJ(ObjString, OBJ_STRING);
