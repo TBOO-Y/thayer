@@ -154,6 +154,31 @@ static InterpretResult run() {
             case OP_TRUE:           push(BOOL_VAL(true)); break;
             case OP_FALSE:          push(BOOL_VAL(false)); break;
             case OP_POP:            pop(); break;
+            case OP_GET_LOCAL: {
+                uint8_t slot = READ_BYTE();
+                push(vm.stack[slot]);
+                break;
+            }
+            case OP_DEFINE_LOCAL: {
+                TokenType type = READ_BYTE();
+                if (!typeCheck(peek(0), type)) {
+                    runtimeError("Tried to define local variable of type '%s' as value with type '%s'.",
+                        typeToName(type), getValueTypeName(peek(0)));
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+                break;
+            }
+            case OP_SET_LOCAL: {
+                uint8_t slot = READ_BYTE();
+                if (!SAME_TYPE(peek(0), vm.stack[slot])
+                    || IS_OBJ(peek(0)) && !SAME_OBJ_TYPE(peek(0), vm.stack[slot])) {
+                    runtimeError("Tried to assign value of type '%s' to local variable of type '%s'.",
+                        getValueTypeName(peek(0)), getValueTypeName(vm.stack[slot]));
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+                vm.stack[slot] = peek(0);
+                break;
+            }
             case OP_GET_GLOBAL: {
                 ObjString* name = READ_STRING();
                 Value value;

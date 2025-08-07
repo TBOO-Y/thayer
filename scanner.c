@@ -147,6 +147,7 @@ static TokenType identifierType() {
                 switch (scanner.start[1]) {
                     case 'l': return checkKeyword(2, 2, "se", TOKEN_ELSE);
                     case 'n': return checkKeyword(2, 1, "d", TOKEN_END);
+                    case 'b': return checkKeyword(2, 4, "lock", TOKEN_END_BLOCK);
                 }
             }
             break;
@@ -182,6 +183,7 @@ static TokenType identifierType() {
                 switch (scanner.start[1]) {
                     case 'u': return checkKeyword(2, 3, "per", TOKEN_SUPER);
                     case 't': return checkKeyword(2, 1, "r", TOKEN_STR);
+                    case 'b': return checkKeyword(2, 4, "lock", TOKEN_START_BLOCK);
                 }
             }
         case 't':

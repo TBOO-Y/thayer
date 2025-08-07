@@ -25,7 +25,7 @@ ValueType tagToType(TokenType type) {
         case TOKEN_CHAR:   return VAL_CHAR;
         case TOKEN_DOUBLE: return VAL_NUMBER;
         case TOKEN_INT:    return VAL_INT;
-        case TOKEN_STR:    return VAL_OBJ;
+        case TOKEN_STR:    return VAL_OBJ; // Should be changed later to accommodate more types of objects
         default:           return VAL_NIL;
     }
 }
