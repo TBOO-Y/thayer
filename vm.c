@@ -38,11 +38,13 @@ void initVM() {
     resetStack();
     vm.objects = NULL;
     initTable(&vm.globals);
+    initTable(&vm.constGlobals);
     initTable(&vm.strings);
 }
 
 void freeVM() {
     freeTable(&vm.globals);
+    freeTable(&vm.constGlobals);
     freeTable(&vm.strings);
     freeObjects();
 }
@@ -61,6 +63,11 @@ void push(Value value) {
 
 Value pop() {
     vm.stackTop--;
+    return *vm.stackTop;
+}
+
+Value popN(uint8_t N) {
+    vm.stackTop -= N;
     return *vm.stackTop;
 }
 
@@ -154,6 +161,11 @@ static InterpretResult run() {
             case OP_TRUE:           push(BOOL_VAL(true)); break;
             case OP_FALSE:          push(BOOL_VAL(false)); break;
             case OP_POP:            pop(); break;
+            case OP_POPN: {
+                uint8_t N = READ_BYTE();
+                popN(N);
+                break;
+            }
             case OP_GET_LOCAL: {
                 uint8_t slot = READ_BYTE();
                 push(vm.stack[slot]);
@@ -189,13 +201,37 @@ static InterpretResult run() {
                 push(value);
                 break;
             }
-            case OP_DEFINE_GLOBAL: {
+            case OP_DEFINE_CONST_GLOBAL: {
                 ObjString* name = READ_STRING();
                 TokenType type = READ_BYTE();
 
                 if (!typeCheck(peek(0), type)) {
                     const char* typeName = typeToName(type);
                     runtimeError("Variable '%s' does not match declared type '%s'.", name->chars, typeName);
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+
+                if (!tableSet(&vm.globals, name, peek(0))) {
+                    runtimeError("Cannot re-define a constant global variable.");
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+                tableSet(&vm.constGlobals, name, peek(0));
+                pop();
+                break;
+            }
+            case OP_DEFINE_GLOBAL: {
+                ObjString* name = READ_STRING();
+                TokenType type = READ_BYTE();
+                Value value;
+
+                if (!typeCheck(peek(0), type)) {
+                    const char* typeName = typeToName(type);
+                    runtimeError("Variable '%s' does not match declared type '%s'.", name->chars, typeName);
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+
+                if (tableGet(&vm.constGlobals, name, &value)) {
+                    runtimeError("Cannot re-define a constant global variable.");
                     return INTERPRET_RUNTIME_ERROR;
                 }
 
@@ -215,6 +251,11 @@ static InterpretResult run() {
                 if (tableSet(&vm.globals, name, peek(0))) {
                     tableDelete(&vm.globals, name);
                     runtimeError("Undefined variable '%s'.", name->chars);
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+
+                if (tableGet(&vm.constGlobals, name, &value)) {
+                    runtimeError("Cannot re-assign a constant global variable.");
                     return INTERPRET_RUNTIME_ERROR;
                 }
                 break;

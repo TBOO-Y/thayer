@@ -49,7 +49,8 @@ typedef struct {
 typedef struct {
     Token name;
     int depth;
-    TokenType type;
+    TokenType type; // I think this is actually useless? Change tomorrow
+    bool isConst;
 } Local;
 
 typedef struct {
@@ -168,14 +169,15 @@ static void beginScope() {
     current->scopeDepth++;
 }
 
-static void endScope() { // Optimize using a OP_POPN instruction
+static void endScope() {
     current->scopeDepth--;
-
+    uint8_t numberPopped = 0;
     while (current->localCount > 0 &&
            current->locals[current->localCount - 1].depth > current->scopeDepth) {
-        emitByte(OP_POP);
+        numberPopped++;
         current->localCount--;
     }
+    emitBytes(OP_POPN, numberPopped);
 }
 
 static void expression();
@@ -207,7 +209,7 @@ static int resolveLocal(Compiler* compiler, Token* name) {
     return -1;
 }
 
-static void addLocal(Token name, TokenType type) {
+static void addLocal(Token name, TokenType type, bool isConst) {
     if (current->localCount == UINT8_COUNT) {
         error("Too many local variables in function.");
         return;
@@ -217,9 +219,10 @@ static void addLocal(Token name, TokenType type) {
     local->name = name;
     local->depth = -1;
     local->type = type;
+    local->isConst = isConst;
 }
 
-static void declareVariable(TokenType type) {
+static void declareVariable(TokenType type, bool isConst) {
     if (current->scopeDepth == 0) return;
 
     Token* name = &parser.previous;
@@ -234,29 +237,34 @@ static void declareVariable(TokenType type) {
         }
     }
 
-    addLocal(*name, type);
+    addLocal(*name, type, isConst);
 }
 
-static uint8_t parseVariable(const char* errorMessage, TokenType type) {
+static uint8_t parseVariable(const char* errorMessage, TokenType type, bool isConst) {
     consume(TOKEN_IDENTIFIER, errorMessage);
 
-    declareVariable(type);
+    declareVariable(type, isConst);
     if (current->scopeDepth > 0) return 0;
 
     return identifierConstant(&parser.previous);
 }
 
-static void markInitialized(TokenType type) {
+static void markInitialized(TokenType type, bool isConst) {
     current->locals[current->localCount - 1].depth = current->scopeDepth;
     emitBytes(OP_DEFINE_LOCAL, type);
 }
 
-static void defineVariable(uint8_t global, TokenType type) {
+static void defineVariable(uint8_t global, TokenType type, bool isConst) {
     if (current->scopeDepth > 0) {
-        markInitialized(type);
+        markInitialized(type, isConst);
         return;
     }
 
+    if (isConst) {
+        emitBytes(OP_DEFINE_CONST_GLOBAL, global);
+        emitByte(type);
+        return;
+    }
     emitBytes(OP_DEFINE_GLOBAL, global);
     emitByte(type);
 }
@@ -312,10 +320,10 @@ static void block() {
     consume(TOKEN_END_BLOCK, "Expect 'eblock' after block.");
 }
 
-static void varDeclaration() {
+static void varDeclaration(bool isConst) {
     TokenType type = parser.previous.type;
 
-    uint8_t global = parseVariable("Expect variable name.", type);
+    uint8_t global = parseVariable("Expect variable name.", type, isConst);
 
     if (match(TOKEN_EQUAL)) {
         expression();
@@ -324,7 +332,17 @@ static void varDeclaration() {
     }
     consume(TOKEN_SEMICOLON, "Expect ; after variable declaration.");
 
-    defineVariable(global, type);
+    defineVariable(global, type, isConst);
+}
+
+static void constVarDeclaration() {
+    if (match(TOKEN_VAR) || match(TOKEN_INT) // Seems slow, should find a better way later
+        || match(TOKEN_STR) || match(TOKEN_DOUBLE)
+        || match(TOKEN_BOOL) || match(TOKEN_CHAR)) {
+        varDeclaration(true);
+    } else {
+        errorAtCurrent("Type annotation must follow 'const' keyword.");
+    }
 }
 
 static void expressionStatement() {
@@ -363,10 +381,12 @@ static void synchronize() {
 }
 
 static void declaration() {
-    if (match(TOKEN_VAR) || match(TOKEN_INT) // Seems slow, should find a better way later
+    if (match(TOKEN_CONST)) {
+        constVarDeclaration();
+    } else if (match(TOKEN_VAR) || match(TOKEN_INT) // Seems slow, should find a better way later
         || match(TOKEN_STR) || match(TOKEN_DOUBLE)
         || match(TOKEN_BOOL) || match(TOKEN_CHAR)) {
-        varDeclaration();
+        varDeclaration(false);
     } else {
         statement();
     }
@@ -403,10 +423,12 @@ static void string(bool canAssign) {
 
 static void namedVariable(Token name, bool canAssign) {
     uint8_t getOp, setOp;
+    bool isConst;
     int arg = resolveLocal(current, &name);
     if (arg != -1) {
         getOp = OP_GET_LOCAL;
         setOp = OP_SET_LOCAL;
+        isConst = current->locals[arg].isConst;
     } else {
         arg = identifierConstant(&name);
         getOp = OP_GET_GLOBAL;
@@ -414,6 +436,10 @@ static void namedVariable(Token name, bool canAssign) {
     }
 
     if (canAssign && match(TOKEN_EQUAL)) {
+        if (isConst) {
+            error("Cannot re-assign a variable declared as constant.");
+            return;
+        }
         expression();
         emitBytes(setOp, (uint8_t)arg);
     } else {
