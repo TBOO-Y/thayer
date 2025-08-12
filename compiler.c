@@ -6,6 +6,8 @@
 #include "vm.h"
 #include "common.h"
 #include "compiler.h"
+
+#include "memory.h"
 #include "scanner.h"
 #include "type_checker.h"
 
@@ -59,9 +61,37 @@ typedef struct {
     int scopeDepth;
 } Compiler;
 
+typedef struct {
+    int* array;
+    int capacity;
+    int count;
+} IntArray;
+
 Parser parser;
 Compiler* current = NULL; // Change later for adaptability to multi-threaded applications, see Chapter 22
 Chunk* compilingChunk;
+
+static void initIntArray(IntArray* intArray) {
+    intArray->array = NULL;
+    intArray->capacity = 0;
+    intArray->count = 0;
+}
+
+static void writeIntArray(IntArray* intArray, int value) {
+    if (intArray->capacity < intArray->count + 1) {
+        int oldCapacity = intArray->capacity;
+        intArray->capacity = GROW_CAPACITY(oldCapacity);
+        intArray->array = GROW_ARRAY(int, intArray->array, oldCapacity, intArray->capacity);
+    }
+
+    intArray->array[intArray->count] = value;
+    intArray->count++;
+}
+
+static void freeIntArray(IntArray* intArray) {
+    FREE_ARRAY(int, intArray->array, intArray->capacity);
+    initIntArray(intArray);
+}
 
 static Chunk* currentChunk() {
     return compilingChunk;
@@ -359,10 +389,11 @@ static void block() {
 }
 
 static void controlBlock() {
-    while (!check(TOKEN_END) && !check(TOKEN_EOF)) {
+    while (!check(TOKEN_END) && !check(TOKEN_ELSE) && !check(TOKEN_EOF)) {
         declaration();
     }
 
+    if (check(TOKEN_ELSE)) return;
     consume(TOKEN_END, "Expect 'end' after conditional or loop.");
 }
 
@@ -389,6 +420,14 @@ static void constVarDeclaration() {
     } else {
         errorAtCurrent("Type annotation must follow 'const' keyword.");
     }
+}
+
+static void breakStatement() {
+    return;
+}
+
+static void continueStatement() {
+    return;
 }
 
 static void expressionStatement() {
@@ -455,14 +494,78 @@ static void ifStatement() {
     patchJump(thenJump);
     emitByte(OP_POP);
 
-    if (match(TOKEN_ELSE)) statement();
+    IntArray toElseJumps;
+    initIntArray(&toElseJumps);
+
+    while (match(TOKEN_ELSE) && check(TOKEN_IF)) {
+        advance();
+        printf("%d", parser.current.type);
+        expression();
+        consume(TOKEN_THEN, "Expect 'then' after condition.");
+
+        int elseIfJump = emitJump(OP_JUMP_IF_FALSE);
+        emitByte(OP_POP);
+        controlBlock();
+
+        int toElseJump = emitJump(OP_JUMP);
+        patchJump(elseIfJump);
+        emitByte(OP_POP);
+
+        writeIntArray(&toElseJumps, toElseJump);
+    }
+
+    if (parser.previous.type == TOKEN_ELSE) {
+        controlBlock();
+    }
     patchJump(elseJump);
+
+    for (int i = 0; i < toElseJumps.count; i++) {
+        patchJump(toElseJumps.array[i]);
+    }
+
+    freeIntArray(&toElseJumps);
 }
 
 static void printStatement() {
     expression();
     consume(TOKEN_SEMICOLON, "Expect ; after value.");
     emitByte(OP_PRINT);
+}
+
+static void switchStatement() { // Maybe a subtle bug: I pop after the entire logic is done, not right after the switch.
+    expression();
+    consume(TOKEN_THEN, "Expect 'then' after switch expression.");
+
+    IntArray toAfterJumps;
+    initIntArray(&toAfterJumps);
+
+    while (match(TOKEN_CASE)) {
+        expression();
+        consume(TOKEN_COLON, "Expect ':' after case.");
+
+        emitByte(OP_TEST_EQUAL);
+        int caseJump = emitJump(OP_JUMP_IF_FALSE);
+        emitByte(OP_POP);
+        controlBlock();
+
+        int toAfterJump = emitJump(OP_JUMP);
+        patchJump(caseJump);
+        emitByte(OP_POP);
+
+        writeIntArray(&toAfterJumps, toAfterJump);
+    }
+
+    if (match(TOKEN_DEFAULT)) {
+        consume(TOKEN_COLON, "Expect ':' after default case.");
+        controlBlock();
+    }
+
+    for (int i = 0; i < toAfterJumps.count; i++) {
+        patchJump(toAfterJumps.array[i]);
+    }
+
+    freeIntArray(&toAfterJumps);
+    emitByte(OP_POP); // To pop the initial expression.
 }
 
 static void whileStatement() {
@@ -519,10 +622,16 @@ static void declaration() {
 static void statement() {
     if (match(TOKEN_PRINT)) {
         printStatement();
+    } else if (match(TOKEN_BREAK)) {
+        breakStatement();
+    } else if (match(TOKEN_CONTINUE)) {
+        continueStatement();
     } else if (match(TOKEN_FOR)) {
         forStatement();
     } else if (match(TOKEN_IF)) {
         ifStatement();
+    } else if (match(TOKEN_SWITCH)) {
+        switchStatement();
     } else if (match(TOKEN_WHILE)) {
         whileStatement();
     } else if (match(TOKEN_START_BLOCK)) {

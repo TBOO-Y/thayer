@@ -125,20 +125,38 @@ static TokenType identifierType() {
                 }
             }
             break;
-        case 'b': return checkKeyword(1, 3, "ool", TOKEN_BOOL);
+        case 'b':
+            if (scanner.current - scanner.start > 1) {
+                switch (scanner.start[1]) {
+                    case 'o': return checkKeyword(2, 2, "ol", TOKEN_BOOL);
+                    case 'r': return checkKeyword(2, 3, "eak", TOKEN_BREAK);
+                }
+            }
         case 'c':
             if (scanner.current - scanner.start > 1) {
                 switch (scanner.start[1]) {
                     case 'h': return checkKeyword(2, 2, "ar", TOKEN_CHAR);
                     case 'l': return checkKeyword(2, 3, "ass", TOKEN_CLASS);
-                    case 'o': return checkKeyword(2, 3, "nst", TOKEN_CONST);
+                    case 'o': {
+                        TokenType type = checkKeyword(2, 3, "nst", TOKEN_CONST);
+                        if (type == TOKEN_CONST) {
+                            return type;
+                        }
+                        return checkKeyword(2, 6, "ntinue", TOKEN_CONTINUE);
+                    }
                 }
             }
             break;
         case 'd':
             if (scanner.current - scanner.start > 1) {
                 switch (scanner.start[1]) {
-                    case 'e': return checkKeyword(2, 4, "fine", TOKEN_DEFINE);
+                    case 'e': {
+                        TokenType type = checkKeyword(2, 4, "fine", TOKEN_DEFINE);
+                        if (type == TOKEN_DEFINE) {
+                            return type;
+                        }
+                        return checkKeyword(2, 5, "fault", TOKEN_DEFAULT);
+                    }
                     case 'o': return checkKeyword(2, 4, "uble", TOKEN_DOUBLE);
                 }
             }
@@ -185,6 +203,7 @@ static TokenType identifierType() {
                     case 'u': return checkKeyword(2, 3, "per", TOKEN_SUPER);
                     case 't': return checkKeyword(2, 1, "r", TOKEN_STR);
                     case 'b': return checkKeyword(2, 4, "lock", TOKEN_START_BLOCK);
+                    case 'w': return checkKeyword(2, 4, "itch", TOKEN_SWITCH);
                 }
             }
         case 't':
@@ -195,8 +214,10 @@ static TokenType identifierType() {
                             switch (scanner.start[2]) {
                                 case 'e': return checkKeyword(3, 1, "n", TOKEN_THEN);
                                 case 'i': return checkKeyword(3, 1, "s", TOKEN_THIS);
+                                default: return TOKEN_IDENTIFIER;
                             }
                         }
+                        return TOKEN_IDENTIFIER;
                     case 'r': return checkKeyword(2, 2, "ue", TOKEN_TRUE);
                 }
             }
