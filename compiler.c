@@ -51,11 +51,20 @@ typedef struct {
 typedef struct {
     Token name;
     int depth;
-    TokenType type; // I think this is actually useless? Change tomorrow
+    TokenType type; // I think this is actually useless? Change later
     bool isConst;
 } Local;
 
-typedef struct {
+typedef enum {
+    TYPE_FUNCTION,
+    TYPE_SCRIPT
+} FunctionType;
+
+typedef struct Compiler {
+    struct Compiler* enclosing; // Implement a limit on how many enclosing compilers possible
+    ObjFunction* function;
+    FunctionType type;
+
     Local locals[UINT8_COUNT];
     int localCount;
     int scopeDepth;
@@ -94,7 +103,7 @@ static void freeIntArray(IntArray* intArray) {
 }
 
 static Chunk* currentChunk() {
-    return compilingChunk;
+    return &current->function->chunk;
 }
 
 static void errorAt(Token* token, const char* message) {
@@ -142,6 +151,18 @@ static void consume(TokenType type, const char* message) {
     errorAtCurrent(message);
 }
 
+static TokenType typeConsume(const char* message) {
+    if (parser.current.type == TOKEN_INT || parser.current.type == TOKEN_STR ||
+        parser.current.type == TOKEN_DOUBLE || parser.current.type == TOKEN_BOOL ||
+        parser.current.type == TOKEN_VAR || parser.current.type == TOKEN_CHAR ||
+        parser.current.type == TOKEN_FUN) {
+        advance();
+        return parser.previous.type;
+    }
+
+    errorAtCurrent(message);
+}
+
 static bool check(TokenType type) {
     return parser.current.type == type;
 }
@@ -180,6 +201,7 @@ static int emitJump(uint8_t instruction) {
 }
 
 static void emitReturn() {
+    emitByte(OP_NIL);
     emitByte(OP_RETURN);
 }
 
@@ -209,19 +231,36 @@ static void patchJump(int offset) {
     currentChunk()->code[offset + 1] = jump & 0xff;
 }
 
-static void initCompiler(Compiler* compiler) {
+static void initCompiler(Compiler* compiler, FunctionType type) {
+    compiler->enclosing = current;
+    compiler->function = NULL;
+    compiler->type = type;
     compiler->localCount = 0;
     compiler->scopeDepth = 0;
+    compiler->function = newFunction();
     current = compiler;
+    if (type != TYPE_SCRIPT) {
+        current->function->name = copyString(parser.previous.start, parser.previous.length);
+    }
+
+    Local* local = &current->locals[current->localCount++];
+    local->depth = 0;
+    local->name.start = "";
+    local->name.length = 0;
 }
 
-static void endCompiler() {
+static ObjFunction* endCompiler() {
     emitReturn();
+    ObjFunction* function = current->function;
 #ifdef DEBUG_PRINT_CODE
     if (!parser.hadError) {
-        disassembleChunk(currentChunk(), "code");
+        disassembleChunk(currentChunk(), function->name != NULL
+            ? function->name->chars : "<script>");
     }
 #endif
+
+    current = current->enclosing;
+    return function;
 }
 
 static void beginScope() {
@@ -309,6 +348,7 @@ static uint8_t parseVariable(const char* errorMessage, TokenType type, bool isCo
 }
 
 static void markInitialized(TokenType type, bool isConst) {
+    if (current->scopeDepth == 0) return;
     current->locals[current->localCount - 1].depth = current->scopeDepth;
     emitBytes(OP_DEFINE_LOCAL, type);
 }
@@ -326,6 +366,21 @@ static void defineVariable(uint8_t global, TokenType type, bool isConst) {
     }
     emitBytes(OP_DEFINE_GLOBAL, global);
     emitByte(type);
+}
+
+static uint8_t argumentList() {
+    uint8_t argCount = 0;
+    if (!check(TOKEN_RIGHT_PAREN)) {
+        do {
+            expression();
+            if (argCount == 255) {
+                error("Can't have more than 255 arguments.");
+            }
+            argCount++;
+        } while (match(TOKEN_COMMA));
+    }
+    consume(TOKEN_RIGHT_PAREN, "Expect ')' after arguments.");
+    return argCount;
 }
 
 static void _and(bool canAssign) {
@@ -360,6 +415,11 @@ static void binary(bool canAssign) {
         default:
             return; // Unreachable.
     }
+}
+
+static void call(bool canAssign) {
+    uint8_t argCount = argumentList();
+    emitBytes(OP_CALL, argCount);
 }
 
 static void literal(bool canAssign) {
@@ -397,6 +457,39 @@ static void controlBlock() {
     consume(TOKEN_END, "Expect 'end' after conditional or loop.");
 }
 
+static void function(FunctionType type) {
+    Compiler compiler;
+    initCompiler(&compiler, type);
+    beginScope();
+
+    consume(TOKEN_LEFT_PAREN, "Expect ')' after function name.");
+    if (!check(TOKEN_RIGHT_PAREN)) {
+        do {
+            current->function->arity++;
+            if (current->function->arity > 255) {
+                errorAtCurrent("Can't have more than 255 parameters.");
+            }
+            TokenType paramType = typeConsume("Expect parameter type."); // Add support for constant param later
+            uint8_t constant = parseVariable("Expect parameter name.", paramType, false);
+            defineVariable(constant, paramType, false);
+        } while (match(TOKEN_COMMA));
+    }
+    consume(TOKEN_RIGHT_PAREN, "Expect ')' after parameters.");
+    consume(TOKEN_DO, "Expect 'do' before function body.");
+    block();
+    consume(TOKEN_END, "Expect 'end' after function body.");
+
+    ObjFunction* function = endCompiler();
+    emitBytes(OP_CONSTANT, makeConstant(OBJ_VAL(function)));
+}
+
+static void funDeclaration() {
+    uint8_t global = parseVariable("Expect function name.", TOKEN_FUN, false);
+    markInitialized(TOKEN_FUN, false);
+    function(TYPE_FUNCTION);
+    defineVariable(global, TOKEN_FUN, false);
+}
+
 static void varDeclaration(bool isConst) {
     TokenType type = parser.previous.type;
 
@@ -415,7 +508,8 @@ static void varDeclaration(bool isConst) {
 static void constVarDeclaration() {
     if (match(TOKEN_VAR) || match(TOKEN_INT) // Seems slow, should find a better way later
         || match(TOKEN_STR) || match(TOKEN_DOUBLE)
-        || match(TOKEN_BOOL) || match(TOKEN_CHAR)) {
+        || match(TOKEN_BOOL) || match(TOKEN_CHAR)
+        || match(TOKEN_FUN)) {
         varDeclaration(true);
     } else {
         errorAtCurrent("Type annotation must follow 'const' keyword.");
@@ -423,11 +517,11 @@ static void constVarDeclaration() {
 }
 
 static void breakStatement() {
-    return;
+    consume(TOKEN_SEMICOLON, "Expect ; after break statement.");
 }
 
 static void continueStatement() {
-    return;
+    consume(TOKEN_SEMICOLON, "Expect ; after continue statement.");
 }
 
 static void expressionStatement() {
@@ -442,7 +536,8 @@ static void forStatement() {
         // No initializer.
     } else if (match(TOKEN_VAR) || match(TOKEN_INT) // Seems slow, should find a better way later
         || match(TOKEN_STR) || match(TOKEN_DOUBLE)
-        || match(TOKEN_BOOL) || match(TOKEN_CHAR)) {
+        || match(TOKEN_BOOL) || match(TOKEN_CHAR)
+        || match(TOKEN_FUN)) {
         varDeclaration(false);
     } else {
         expressionStatement();
@@ -499,7 +594,6 @@ static void ifStatement() {
 
     while (match(TOKEN_ELSE) && check(TOKEN_IF)) {
         advance();
-        printf("%d", parser.current.type);
         expression();
         consume(TOKEN_THEN, "Expect 'then' after condition.");
 
@@ -530,6 +624,20 @@ static void printStatement() {
     expression();
     consume(TOKEN_SEMICOLON, "Expect ; after value.");
     emitByte(OP_PRINT);
+}
+
+static void returnStatement() {
+    if (current->type == TYPE_SCRIPT) {
+        error("Can't return from top-level code.");
+    }
+
+    if (match(TOKEN_SEMICOLON)) {
+        emitReturn();
+    } else {
+        expression();
+        consume(TOKEN_SEMICOLON, "Expect ';' after return value.");
+        emitByte(OP_RETURN);
+    }
 }
 
 static void switchStatement() { // Maybe a subtle bug: I pop after the entire logic is done, not right after the switch.
@@ -608,9 +716,12 @@ static void synchronize() {
 static void declaration() {
     if (match(TOKEN_CONST)) {
         constVarDeclaration();
+    } else if (match(TOKEN_DEFINE)) {
+        funDeclaration();
     } else if (match(TOKEN_VAR) || match(TOKEN_INT) // Seems slow, should find a better way later
         || match(TOKEN_STR) || match(TOKEN_DOUBLE)
-        || match(TOKEN_BOOL) || match(TOKEN_CHAR)) {
+        || match(TOKEN_BOOL) || match(TOKEN_CHAR)
+        || match(TOKEN_FUN)) {
         varDeclaration(false);
     } else {
         statement();
@@ -630,6 +741,8 @@ static void statement() {
         forStatement();
     } else if (match(TOKEN_IF)) {
         ifStatement();
+    } else if (match(TOKEN_RETURN)) {
+        returnStatement();
     } else if (match(TOKEN_SWITCH)) {
         switchStatement();
     } else if (match(TOKEN_WHILE)) {
@@ -713,7 +826,7 @@ static void unary(bool canAssign) {
 }
 
 ParseRule rules[] = {
-    [TOKEN_LEFT_PAREN]    = {grouping, NULL, PREC_NONE},
+    [TOKEN_LEFT_PAREN]    = {grouping, call, PREC_CALL},
     [TOKEN_RIGHT_PAREN]   = {NULL, NULL, PREC_NONE},
     [TOKEN_LEFT_BRACE]    = {NULL, NULL, PREC_NONE},
     [TOKEN_RIGHT_BRACE]   = {NULL, NULL, PREC_NONE},
@@ -750,14 +863,20 @@ ParseRule rules[] = {
     [TOKEN_AND]           = {NULL, _and, PREC_AND},
     [TOKEN_AS]            = {NULL, NULL, PREC_NONE},
     [TOKEN_BOOL]          = {NULL, NULL, PREC_NONE},
+    [TOKEN_BREAK]         = {NULL, NULL, PREC_NONE},
+    [TOKEN_CASE]          = {NULL, NULL, PREC_NONE},
+    [TOKEN_CONTINUE]      = {NULL, NULL, PREC_NONE},
     [TOKEN_CHAR]          = {NULL, NULL, PREC_NONE},
     [TOKEN_CLASS]         = {NULL, NULL, PREC_NONE},
+    [TOKEN_CONST]         = {NULL, NULL, PREC_NONE},
     [TOKEN_DO]            = {NULL, NULL, PREC_NONE},
     [TOKEN_DEFINE]        = {NULL, NULL, PREC_NONE},
+    [TOKEN_DEFAULT]       = {NULL, NULL, PREC_NONE},
     [TOKEN_DOUBLE]        = {NULL, NULL, PREC_NONE},
     [TOKEN_ELSE]          = {NULL, NULL, PREC_NONE},
     [TOKEN_END]           = {NULL, NULL, PREC_NONE},
     [TOKEN_FALSE]         = {literal, NULL, PREC_NONE},
+    [TOKEN_FUN]           = {NULL, NULL, PREC_NONE},
     [TOKEN_FOR]           = {NULL, NULL, PREC_NONE},
     [TOKEN_IF]            = {NULL, NULL, PREC_NONE},
     [TOKEN_INT]           = {NULL, NULL, PREC_NONE},
@@ -768,6 +887,8 @@ ParseRule rules[] = {
     [TOKEN_RETURN]        = {NULL, NULL, PREC_NONE},
     [TOKEN_SUPER]         = {NULL, NULL, PREC_NONE},
     [TOKEN_STR]           = {NULL, NULL, PREC_NONE},
+    [TOKEN_SWITCH]        = {NULL, NULL, PREC_NONE},
+    [TOKEN_THEN]          = {NULL, NULL, PREC_NONE},
     [TOKEN_THIS]          = {NULL, NULL, PREC_NONE},
     [TOKEN_TRUE]          = {literal, NULL, PREC_NONE},
     [TOKEN_VAR]           = {NULL, NULL, PREC_NONE},
@@ -802,11 +923,10 @@ static ParseRule* getRule(TokenType type) {
     return &rules[type];
 }
 
-bool compile(const char* source, Chunk* chunk) {
+ObjFunction* compile(const char* source) {
     initScanner(source);
     Compiler compiler;
-    initCompiler(&compiler);
-    compilingChunk = chunk;
+    initCompiler(&compiler, TYPE_SCRIPT);
 
     parser.hadError = false;
     parser.panicMode = false;
@@ -817,7 +937,6 @@ bool compile(const char* source, Chunk* chunk) {
         declaration();
     }
 
-    consume(TOKEN_EOF, "Expect end of expression.");
-    endCompiler();
-    return !parser.hadError;
+    ObjFunction* function = endCompiler();
+    return parser.hadError ? NULL : function;
 }
