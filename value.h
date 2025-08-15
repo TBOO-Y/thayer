@@ -12,7 +12,8 @@ typedef enum {
     VAL_INT,
     VAL_NIL,
     VAL_NUMBER,
-    VAL_OBJ
+    VAL_OBJ,
+    VAL_ERR
 } ValueType;
 
 typedef struct {
@@ -28,6 +29,7 @@ typedef struct {
 
 #define IS_BOOL(value)      ((value).type == VAL_BOOL)
 #define IS_CHAR(value)      ((value).type == VAL_CHAR)
+#define IS_ERR(value)       ((value).type == VAL_ERR)
 #define IS_INT(value)       ((value).type == VAL_INT)
 #define IS_NIL(value)       ((value).type == VAL_NIL)
 #define IS_NUMBER(value)    ((value).type == VAL_NUMBER)
@@ -42,6 +44,7 @@ typedef struct {
 
 #define BOOL_VAL(value)     ((Value){VAL_BOOL, {.boolean = value}})
 #define CHAR_VAL(value)     ((Value){VAL_CHAR, {.chara = value}})
+#define ERR_VAL             ((Value){VAL_ERR, {.number = 1}})
 #define INT_VAL(value)      ((Value){VAL_INT, {.integer = value}})
 #define NIL_VAL             ((Value){VAL_NIL, {.number = 0}})
 #define NUMBER_VAL(value)   ((Value){VAL_NUMBER, {.number = value}})
