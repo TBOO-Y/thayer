@@ -9,7 +9,7 @@
 #define FRAMES_MAX 512
 
 typedef struct {
-    ObjFunction* function;
+    ObjClosure* closure;
     uint8_t* ip;
     Value* slots;
 } CallFrame;
@@ -24,6 +24,7 @@ typedef struct {
     Table globals;
     Table constGlobals;
     Table strings;
+    ObjUpvalue* openUpvalues;
     Obj* objects;
 } VM;
 
