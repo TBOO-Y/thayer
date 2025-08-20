@@ -51,7 +51,6 @@ typedef struct {
 typedef struct {
     Token name;
     int depth;
-    TokenType type; // I think this is actually useless? Change later
     bool isConst;
     bool isCaptured;
 } Local;
@@ -168,6 +167,7 @@ static TokenType typeConsume(const char* message) {
     }
 
     errorAtCurrent(message);
+    return TOKEN_ERROR;
 }
 
 static bool check(TokenType type) {
@@ -357,7 +357,7 @@ static int resolveUpvalue(Compiler* compiler, Token* name) {
     return -1;
 }
 
-static void addLocal(Token name, TokenType type, bool isConst) {
+static void addLocal(Token name, bool isConst) {
     if (current->localCount == UINT8_COUNT) {
         error("Too many local variables in function.");
         return;
@@ -366,12 +366,11 @@ static void addLocal(Token name, TokenType type, bool isConst) {
     Local* local = &current->locals[current->localCount++];
     local->name = name;
     local->depth = -1;
-    local->type = type;
     local->isConst = isConst;
     local->isCaptured = false;
 }
 
-static void declareVariable(TokenType type, bool isConst) {
+static void declareVariable(bool isConst) {
     if (current->scopeDepth == 0) return;
 
     Token* name = &parser.previous;
@@ -386,19 +385,19 @@ static void declareVariable(TokenType type, bool isConst) {
         }
     }
 
-    addLocal(*name, type, isConst);
+    addLocal(*name, isConst);
 }
 
-static uint8_t parseVariable(const char* errorMessage, TokenType type, bool isConst) {
+static uint8_t parseVariable(const char* errorMessage, bool isConst) {
     consume(TOKEN_IDENTIFIER, errorMessage);
 
-    declareVariable(type, isConst);
+    declareVariable(isConst);
     if (current->scopeDepth > 0) return 0;
 
     return identifierConstant(&parser.previous);
 }
 
-static void markInitialized(TokenType type, bool isConst) {
+static void markInitialized(TokenType type) {
     if (current->scopeDepth == 0) return;
     current->locals[current->localCount - 1].depth = current->scopeDepth;
     emitBytes(OP_DEFINE_LOCAL, type);
@@ -406,7 +405,7 @@ static void markInitialized(TokenType type, bool isConst) {
 
 static void defineVariable(uint8_t global, TokenType type, bool isConst) {
     if (current->scopeDepth > 0) {
-        markInitialized(type, isConst);
+        markInitialized(type);
         return;
     }
 
@@ -521,7 +520,7 @@ static void function(FunctionType type) {
                 errorAtCurrent("Can't have more than 255 parameters.");
             }
             TokenType paramType = typeConsume("Expect parameter type."); // Add support for constant param later
-            uint8_t constant = parseVariable("Expect parameter name.", paramType, false);
+            uint8_t constant = parseVariable("Expect parameter name.", false);
             defineVariable(constant, paramType, false);
         } while (match(TOKEN_COMMA));
     }
@@ -540,8 +539,8 @@ static void function(FunctionType type) {
 }
 
 static void funDeclaration() {
-    uint8_t global = parseVariable("Expect function name.", TOKEN_FUN, false);
-    markInitialized(TOKEN_FUN, false);
+    uint8_t global = parseVariable("Expect function name.", false);
+    markInitialized(TOKEN_FUN);
     function(TYPE_FUNCTION);
     defineVariable(global, TOKEN_FUN, false);
 }
@@ -549,7 +548,7 @@ static void funDeclaration() {
 static void varDeclaration(bool isConst) {
     TokenType type = parser.previous.type;
 
-    uint8_t global = parseVariable("Expect variable name.", type, isConst);
+    uint8_t global = parseVariable("Expect variable name.", isConst);
 
     if (match(TOKEN_EQUAL)) {
         expression();
