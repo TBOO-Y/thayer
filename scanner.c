@@ -157,7 +157,13 @@ static TokenType identifierType() {
                         }
                         return checkKeyword(2, 5, "fault", TOKEN_DEFAULT);
                     }
-                    case 'o': return checkKeyword(2, 4, "uble", TOKEN_DOUBLE);
+                    case 'o': {
+                        TokenType type = checkKeyword(2, 4, "uble", TOKEN_DOUBLE);
+                        if (type == TOKEN_DOUBLE) {
+                            return type;
+                        }
+                        return scanner.current - scanner.start == 2 ? TOKEN_DO : TOKEN_IDENTIFIER;
+                    }
                 }
             }
             break;
@@ -224,7 +230,7 @@ static TokenType identifierType() {
             }
             break;
         case 'v': return checkKeyword(1, 2, "ar", TOKEN_VAR);
-        case 'w': return checkKeyword(1, 2, "hile", TOKEN_WHILE);
+        case 'w': return checkKeyword(1, 4, "hile", TOKEN_WHILE);
     }
 
     return TOKEN_IDENTIFIER;

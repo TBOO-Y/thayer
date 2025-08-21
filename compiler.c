@@ -255,6 +255,7 @@ static void initCompiler(Compiler* compiler, FunctionType type) {
     local->name.start = "";
     local->name.length = 0;
     local->isCaptured = false;
+    local->isConst = false;
 }
 
 static ObjFunction* endCompiler() {
@@ -397,15 +398,15 @@ static uint8_t parseVariable(const char* errorMessage, bool isConst) {
     return identifierConstant(&parser.previous);
 }
 
-static void markInitialized(TokenType type) {
+static void markInitialized() {
     if (current->scopeDepth == 0) return;
     current->locals[current->localCount - 1].depth = current->scopeDepth;
-    emitBytes(OP_DEFINE_LOCAL, type);
 }
 
 static void defineVariable(uint8_t global, TokenType type, bool isConst) {
     if (current->scopeDepth > 0) {
-        markInitialized(type);
+        markInitialized();
+        emitBytes(OP_DEFINE_LOCAL, type);
         return;
     }
 
@@ -498,13 +499,21 @@ static void block() {
     consume(TOKEN_END_BLOCK, "Expect 'eblock' after block.");
 }
 
-static void controlBlock() {
+static void ifControlBlock() {
     while (!check(TOKEN_END) && !check(TOKEN_ELSE) && !check(TOKEN_EOF)) {
         declaration();
     }
 
     if (check(TOKEN_ELSE)) return;
     consume(TOKEN_END, "Expect 'end' after conditional or loop.");
+}
+
+static void controlBlock() {
+    while (!check(TOKEN_END) && !check(TOKEN_EOF)) {
+        declaration();
+    }
+
+    consume(TOKEN_END, "Expect 'end' after function, conditional, or loop.");
 }
 
 static void function(FunctionType type) {
@@ -526,8 +535,7 @@ static void function(FunctionType type) {
     }
     consume(TOKEN_RIGHT_PAREN, "Expect ')' after parameters.");
     consume(TOKEN_DO, "Expect 'do' before function body.");
-    block();
-    consume(TOKEN_END, "Expect 'end' after function body.");
+    controlBlock();
 
     ObjFunction* function = endCompiler();
     emitBytes(OP_CLOSURE, makeConstant(OBJ_VAL(function)));
@@ -540,12 +548,12 @@ static void function(FunctionType type) {
 
 static void funDeclaration() {
     uint8_t global = parseVariable("Expect function name.", false);
-    markInitialized(TOKEN_FUN);
+    markInitialized();
     function(TYPE_FUNCTION);
     defineVariable(global, TOKEN_FUN, false);
 }
 
-static void varDeclaration(bool isConst) {
+static void varDeclaration(bool isConst, bool loop) {
     TokenType type = parser.previous.type;
 
     uint8_t global = parseVariable("Expect variable name.", isConst);
@@ -555,7 +563,11 @@ static void varDeclaration(bool isConst) {
     } else {
         emitByte(OP_NIL);
     }
-    consume(TOKEN_SEMICOLON, "Expect ; after variable declaration.");
+    if (loop) {
+        consume(TOKEN_COLON, "Expect : after variable declaration.");
+    } else {
+        consume(TOKEN_SEMICOLON, "Expect ; after variable declaration.");
+    }
 
     defineVariable(global, type, isConst);
 }
@@ -565,7 +577,7 @@ static void constVarDeclaration() {
         || match(TOKEN_STR) || match(TOKEN_DOUBLE)
         || match(TOKEN_BOOL) || match(TOKEN_CHAR)
         || match(TOKEN_FUN)) {
-        varDeclaration(true);
+        varDeclaration(true, false);
     } else {
         errorAtCurrent("Type annotation must follow 'const' keyword.");
     }
@@ -593,7 +605,7 @@ static void forStatement() {
         || match(TOKEN_STR) || match(TOKEN_DOUBLE)
         || match(TOKEN_BOOL) || match(TOKEN_CHAR)
         || match(TOKEN_FUN)) {
-        varDeclaration(false);
+        varDeclaration(false, true);
     } else {
         expressionStatement();
     }
@@ -608,7 +620,7 @@ static void forStatement() {
         exitJump = emitJump(OP_JUMP_IF_FALSE);
         emitByte(OP_POP); // Condition.
     }
-    consume(TOKEN_COLON, "Expect ':'.");
+    // consume(TOKEN_COLON, "Expect ':'.");
     if (!match(TOKEN_DO)) {
         int bodyJump = emitJump(OP_JUMP);
         int incrementStart = currentChunk()->count;
@@ -638,7 +650,7 @@ static void ifStatement() {
 
     int thenJump = emitJump(OP_JUMP_IF_FALSE);
     emitByte(OP_POP);
-    controlBlock();
+    ifControlBlock();
 
     int elseJump = emitJump(OP_JUMP);
     patchJump(thenJump);
@@ -654,7 +666,7 @@ static void ifStatement() {
 
         int elseIfJump = emitJump(OP_JUMP_IF_FALSE);
         emitByte(OP_POP);
-        controlBlock();
+        ifControlBlock();
 
         int toElseJump = emitJump(OP_JUMP);
         patchJump(elseIfJump);
@@ -777,7 +789,7 @@ static void declaration() {
         || match(TOKEN_STR) || match(TOKEN_DOUBLE)
         || match(TOKEN_BOOL) || match(TOKEN_CHAR)
         || match(TOKEN_FUN)) {
-        varDeclaration(false);
+        varDeclaration(false, false);
     } else {
         statement();
     }
@@ -837,7 +849,7 @@ static void string(bool canAssign) {
 
 static void namedVariable(Token name, bool canAssign) {
     uint8_t getOp, setOp;
-    bool isConst;
+    bool isConst = false;
     int arg = resolveLocal(current, &name);
     if (arg != -1) {
         getOp = OP_GET_LOCAL;
