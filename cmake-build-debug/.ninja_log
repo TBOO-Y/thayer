@@ -88,3 +88,15 @@
 18	181	7774945295334674	CMakeFiles/thayer.dir/scanner.c.obj	c4ceebcee598f688
 6	234	7774945295213114	CMakeFiles/thayer.dir/compiler.c.obj	377759dc0e93498a
 234	428	7774945297488768	thayer.exe	bb86a85e705381da
+46	391	7775821245843223	CMakeFiles/thayer.dir/chunk.c.obj	95a2b9e4205c8ddc
+83	435	7775821246221651	CMakeFiles/thayer.dir/debug.c.obj	944bd6a6d6e7d7b6
+97	453	7775821246351649	CMakeFiles/thayer.dir/value.c.obj	67ea8da97712632
+60	468	7775821245989273	CMakeFiles/thayer.dir/memory.c.obj	7ad29ad475019b2a
+15	480	7775821245543083	CMakeFiles/thayer.dir/main.c.obj	23967a0ff3007bc4
+124	665	7775821246633851	CMakeFiles/thayer.dir/vm.c.obj	5ac7ac898d39127b
+435	689	7775821249733803	CMakeFiles/thayer.dir/scanner.c.obj	c4ceebcee598f688
+468	690	7775821250075609	CMakeFiles/thayer.dir/table.c.obj	46902f09393134b5
+480	699	7775821250189422	CMakeFiles/thayer.dir/type_checker.c.obj	a8b4cbfc8161ea0b
+393	713	7775821249320365	CMakeFiles/thayer.dir/compiler.c.obj	377759dc0e93498a
+453	716	7775821249914621	CMakeFiles/thayer.dir/object.c.obj	7c061d5b262a47f6
+716	1138	7775821252542356	thayer.exe	bb86a85e705381da

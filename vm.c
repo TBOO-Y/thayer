@@ -60,6 +60,13 @@ void initVM() {
     vm.stackCapacity = 256; // Set stack capacity to 256 initially
     resetStack();
     vm.objects = NULL;
+    vm.bytesAllocated = 0;
+    vm.nextGC = 1024 * 1024;
+
+    vm.grayCount = 0;
+    vm.grayCapacity = 0;
+    vm.grayStack = NULL;
+
     initTable(&vm.globals);
     initTable(&vm.constGlobals);
     initTable(&vm.strings);
@@ -184,8 +191,8 @@ static bool isFalsey(Value value) {
 }
 
 static void concatenate() {
-    ObjString* b = AS_STRING(pop());
-    ObjString* a = AS_STRING(pop());
+    ObjString* b = AS_STRING(peek(0));
+    ObjString* a = AS_STRING(peek(0));
     int length = a->length + b->length;
     char* chars = ALLOCATE(char, length);
     memcpy(chars, a->chars, a->length);
@@ -193,6 +200,8 @@ static void concatenate() {
     chars[length] = '\0';
 
     ObjString* result = takeString(chars, length);
+    pop();
+    pop();
     push(OBJ_VAL(result));
 }
 
@@ -303,8 +312,10 @@ static InterpretResult run() {
                 ObjString* name = READ_STRING();
                 Value value;
                 if (!tableGet(&vm.globals, name, &value)) {
-                    runtimeError("Undefined variable '%s'.", name->chars);
-                    return INTERPRET_RUNTIME_ERROR;
+                    if (!tableGet(&vm.constGlobals, name, &value)) {
+                        runtimeError("Undefined variable '%s'.", name->chars);
+                        return INTERPRET_RUNTIME_ERROR;
+                    }
                 }
                 push(value);
                 break;
@@ -312,6 +323,7 @@ static InterpretResult run() {
             case OP_DEFINE_CONST_GLOBAL: {
                 ObjString* name = READ_STRING();
                 TokenType type = READ_BYTE();
+                Value value;
 
                 if (!typeCheck(peek(0), type)) {
                     const char* typeName = typeToName(type);
@@ -319,10 +331,16 @@ static InterpretResult run() {
                     return INTERPRET_RUNTIME_ERROR;
                 }
 
-                if (!tableSet(&vm.globals, name, peek(0))) {
+                if (tableGet(&vm.globals, name, &value)) {
+                    runtimeError("Cannot re-define a global variable as constant.");
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+
+                if (tableGet(&vm.constGlobals, name, &value)) {
                     runtimeError("Cannot re-define a constant global variable.");
                     return INTERPRET_RUNTIME_ERROR;
                 }
+
                 tableSet(&vm.constGlobals, name, peek(0));
                 pop();
                 break;
@@ -350,22 +368,23 @@ static InterpretResult run() {
             case OP_SET_GLOBAL: { // Constant global operations all need to be optimized (divorce const globals table)
                 ObjString* name = READ_STRING();
                 Value value;
-                if (tableGet(&vm.globals, name, &value) && !SAME_TYPE(peek(0), value)) {
-                    runtimeError("Tried to assign value of type '%s' to variable '%s' of type '%s'.",
-                        getValueTypeName(peek(0)), name->chars, getValueTypeName(value));
-                    return INTERPRET_RUNTIME_ERROR;
-                }
 
-                if (tableSet(&vm.globals, name, peek(0))) {
-                    tableDelete(&vm.globals, name);
+                if (tableGet(&vm.globals, name, &value)) {
+                    if (!SAME_TYPE(peek(0), value)) {
+                        runtimeError("Tried to assign value of type '%s' to variable '%s' of type '%s'.",
+                        getValueTypeName(peek(0)), name->chars, getValueTypeName(value));
+                        return INTERPRET_RUNTIME_ERROR;
+                    }
+                    tableSet(&vm.globals, name, peek(0));
+                } else {
+                    if (tableGet(&vm.constGlobals, name, &value)) {
+                        runtimeError("Tried to assign value to constant global variable '%s'.", name->chars);
+                        return INTERPRET_RUNTIME_ERROR;
+                    }
                     runtimeError("Undefined variable '%s'.", name->chars);
                     return INTERPRET_RUNTIME_ERROR;
                 }
 
-                if (tableGet(&vm.constGlobals, name, &value)) {
-                    runtimeError("Cannot re-assign a constant global variable.");
-                    return INTERPRET_RUNTIME_ERROR;
-                }
                 break;
             }
             case OP_GET_UPVALUE: {
