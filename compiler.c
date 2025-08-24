@@ -534,7 +534,7 @@ static void function(FunctionType type) {
         } while (match(TOKEN_COMMA));
     }
     consume(TOKEN_RIGHT_PAREN, "Expect ')' after parameters.");
-    consume(TOKEN_DO, "Expect 'do' before function body.");
+    consume(TOKEN_AS, "Expect 'as' before function body.");
     controlBlock();
 
     ObjFunction* function = endCompiler();

@@ -16,7 +16,7 @@ bool typeCheck(Value value, TokenType type) {
         case TOKEN_STR: // Should be changed later to accommodate more types of objects
             return IS_STRING(value);
         case TOKEN_FUN:
-            return IS_FUNCTION(value);
+            return IS_CLOSURE(value) || IS_FUNCTION(value);
         default: return false; // Unreachable.
     }
 }
@@ -53,6 +53,7 @@ const char* getValueTypeName(Value value) {
         case VAL_INT:      return "int";
         case VAL_OBJ: {
             switch (value.as.obj->type) {
+                case OBJ_CLOSURE:  return "closure";
                 case OBJ_FUNCTION: return "function";
                 case OBJ_STRING:   return "string";
                 default:           return "nil";
