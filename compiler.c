@@ -7,6 +7,8 @@
 #include "common.h"
 #include "compiler.h"
 
+#include <math.h>
+
 #include "memory.h"
 #include "scanner.h"
 #include "type_checker.h"
@@ -65,6 +67,12 @@ typedef enum {
     TYPE_SCRIPT
 } FunctionType;
 
+typedef struct {
+    int* array;
+    int capacity;
+    int count;
+} IntArray;
+
 typedef struct Compiler {
     struct Compiler* enclosing; // Implement a limit on how many enclosing compilers possible
     ObjFunction* function;
@@ -74,13 +82,10 @@ typedef struct Compiler {
     int localCount;
     Upvalue upvalues[UINT8_COUNT];
     int scopeDepth;
+    IntArray loopBreaks;
+    IntArray loopContinues;
+    IntArray loops;
 } Compiler;
-
-typedef struct {
-    int* array;
-    int capacity;
-    int count;
-} IntArray;
 
 Parser parser;
 Compiler* current = NULL; // Change later for adaptability to multi-threaded applications, see Chapter 22
@@ -101,6 +106,10 @@ static void writeIntArray(IntArray* intArray, int value) {
 
     intArray->array[intArray->count] = value;
     intArray->count++;
+}
+
+static void deleteIntArray(IntArray* intArray) {
+    intArray->count--;
 }
 
 static void freeIntArray(IntArray* intArray) {
@@ -245,6 +254,9 @@ static void initCompiler(Compiler* compiler, FunctionType type) {
     compiler->localCount = 0;
     compiler->scopeDepth = 0;
     compiler->function = newFunction();
+    initIntArray(&compiler->loopBreaks);
+    initIntArray(&compiler->loopContinues);
+    initIntArray(&compiler->loops);
     current = compiler;
     if (type != TYPE_SCRIPT) {
         current->function->name = copyString(parser.previous.start, parser.previous.length);
@@ -259,6 +271,9 @@ static void initCompiler(Compiler* compiler, FunctionType type) {
 }
 
 static ObjFunction* endCompiler() {
+    freeIntArray(&current->loopBreaks);
+    freeIntArray(&current->loopContinues);
+    freeIntArray(&current->loops);
     emitReturn();
     ObjFunction* function = current->function;
 #ifdef DEBUG_PRINT_CODE
@@ -473,6 +488,18 @@ static void call(bool canAssign) {
     emitBytes(OP_CALL, argCount);
 }
 
+static void dot(bool canAssign) {
+    consume(TOKEN_IDENTIFIER, "Expect property name after '.'.");
+    uint8_t name = identifierConstant(&parser.previous);
+
+    if (canAssign && match(TOKEN_EQUAL)) {
+        expression();
+        emitBytes(OP_SET_PROPERTY, name);
+    } else {
+        emitBytes(OP_GET_PROPERTY, name);
+    }
+}
+
 static void literal(bool canAssign) {
     switch (parser.previous.type) {
         case TOKEN_FALSE: emitByte(OP_FALSE); break;
@@ -546,6 +573,18 @@ static void function(FunctionType type) {
     }
 }
 
+static void classDeclaration() {
+    consume(TOKEN_IDENTIFIER, "Expect class name.");
+    uint8_t nameConstant = identifierConstant(&parser.previous);
+    declareVariable(false);
+
+    emitBytes(OP_CLASS, nameConstant);
+    defineVariable(nameConstant, TOKEN_CLASS, false);
+
+    consume(TOKEN_AS, "Expect 'as' before class body.");
+    consume(TOKEN_END, "Expect 'end' after class body.");
+}
+
 static void funDeclaration() {
     uint8_t global = parseVariable("Expect function name.", false);
     markInitialized();
@@ -584,10 +623,24 @@ static void constVarDeclaration() {
 }
 
 static void breakStatement() {
+    if (current->loops.count == 0) {
+        errorAtCurrent("Break statements must be in loops.");
+    }
+
+    int breakJump = emitJump(OP_JUMP);
+    writeIntArray(&current->loopBreaks, breakJump);
+
     consume(TOKEN_SEMICOLON, "Expect ; after break statement.");
 }
 
 static void continueStatement() {
+    if (current->loops.count == 0) {
+        errorAtCurrent("Continue statements must be in loops.");
+    }
+
+    int continueJump = emitJump(OP_JUMP);
+    writeIntArray(&current->loopContinues, continueJump);
+
     consume(TOKEN_SEMICOLON, "Expect ; after continue statement.");
 }
 
@@ -633,8 +686,16 @@ static void forStatement() {
         patchJump(bodyJump);
     }
 
+    writeIntArray(&current->loops, currentChunk()->count);
     controlBlock();
     emitLoop(loopStart);
+
+    while (current->loopBreaks.count > 0 && current->loopBreaks.array[current->loopBreaks.count - 1] >
+           current->loops.array[current->loops.count - 1]) {
+        patchJump(current->loopBreaks.array[current->loopBreaks.count - 1]);
+        current->loopBreaks.count--;
+    }
+    current->loops.count--;
 
     if (exitJump != -1) {
         patchJump(exitJump);
@@ -750,8 +811,17 @@ static void whileStatement() {
 
     int exitJump = emitJump(OP_JUMP_IF_FALSE);
     emitByte(OP_POP);
+
+    writeIntArray(&current->loops, currentChunk()->count);
     controlBlock();
     emitLoop(loopStart);
+
+    while (current->loopBreaks.count > 0 && current->loopBreaks.array[current->loopBreaks.count - 1] >
+           current->loops.array[current->loops.count - 1]) {
+        patchJump(current->loopBreaks.array[current->loopBreaks.count - 1]);
+        current->loopBreaks.count--;
+    }
+    current->loops.count--;
 
     patchJump(exitJump);
     emitByte(OP_POP);
@@ -781,7 +851,9 @@ static void synchronize() {
 }
 
 static void declaration() {
-    if (match(TOKEN_CONST)) {
+    if (match(TOKEN_CLASS)) {
+        classDeclaration();
+    } else if (match(TOKEN_CONST)) {
         constVarDeclaration();
     } else if (match(TOKEN_DEFINE)) {
         funDeclaration();
@@ -903,7 +975,7 @@ ParseRule rules[] = {
     [TOKEN_START_BLOCK]   = {NULL, NULL, PREC_NONE},
     [TOKEN_END_BLOCK]     = {NULL, NULL, PREC_NONE},
     [TOKEN_COMMA]         = {NULL, NULL, PREC_NONE},
-    [TOKEN_DOT]           = {NULL, NULL, PREC_NONE},
+    [TOKEN_DOT]           = {NULL, dot, PREC_CALL},
     [TOKEN_MINUS]         = {unary, binary, PREC_TERM},
     [TOKEN_PLUS]          = {NULL, binary, PREC_TERM},
     [TOKEN_SEMICOLON]     = {NULL, NULL, PREC_NONE},
