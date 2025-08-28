@@ -47,10 +47,12 @@ typedef enum {
     OP_JUMP_IF_TRUE,
     OP_LOOP,
     OP_CALL,
+    OP_INVOKE,
     OP_CLOSURE,
     OP_CLOSE_UPVALUE,
     OP_RETURN,
     OP_CLASS,
+    OP_METHOD,
     OP_TEST
 } OpCode;
 
