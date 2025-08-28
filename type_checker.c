@@ -17,6 +17,8 @@ bool typeCheck(Value value, TokenType type) {
             return IS_STRING(value);
         case TOKEN_FUN:
             return IS_CLOSURE(value) || IS_FUNCTION(value);
+        case TOKEN_CLASS:
+            return IS_CLASS(value);
         default: return false; // Unreachable.
     }
 }
@@ -28,6 +30,7 @@ ValueType tagToType(TokenType type) {
         case TOKEN_DOUBLE: return VAL_NUMBER;
         case TOKEN_INT:    return VAL_INT;
         case TOKEN_FUN:    return VAL_OBJ;
+        case TOKEN_CLASS:  return VAL_OBJ;
         case TOKEN_STR:    return VAL_OBJ; // Should be changed later to accommodate more types of objects
         default:           return VAL_NIL;
     }
@@ -41,6 +44,7 @@ const char* typeToName(TokenType type) {
         case TOKEN_INT:    return "int";
         case TOKEN_STR:    return "string";
         case TOKEN_FUN:    return "function";
+        case TOKEN_CLASS:  return "class";
         default:           return "nil";
     }
 }
@@ -54,7 +58,10 @@ const char* getValueTypeName(Value value) {
         case VAL_OBJ: {
             switch (value.as.obj->type) {
                 case OBJ_CLOSURE:  return "closure";
+                case OBJ_CLASS:    return "class";
                 case OBJ_FUNCTION: return "function";
+                case OBJ_INSTANCE: return "instance";
+                case OBJ_NATIVE:   return "native function";
                 case OBJ_STRING:   return "string";
                 default:           return "nil";
             }
